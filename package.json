@@ -1,0 +1,28 @@
+{
+  "name": "solar-system",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node --max-old-space-size=4096 ./node_modules/nuxt/bin/nuxt.mjs build",
+    "dev": "nuxt dev",
+    "generate": "node --max-old-space-size=4096 ./node_modules/nuxt/bin/nuxt.mjs generate",
+    "preview": "nuxt preview",
+    "start": "node .output/server/index.mjs",
+    "postinstall": "nuxt prepare",
+    "test": "node scripts/test-core.mjs && node scripts/test-components.mjs && node scripts/test-voyager.mjs && node scripts/test-galileo.mjs && node scripts/test-presets.mjs",
+    "typecheck": "nuxt typecheck"
+  },
+  "engines": {
+    "node": "^22.19.0 || ^24.11.0 || >=26.0.0"
+  },
+  "dependencies": {
+    "nuxt": "^4.5.2",
+    "vue": "^3.5.41",
+    "vue-router": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.4",
+    "typescript": "~5.9.3",
+    "vue-tsc": "^3.3.11"
+  }
+}
