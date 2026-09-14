@@ -1,7 +1,12 @@
 import process from 'node:process'
 // https://nuxt.com/docs/api/configuration/nuxt-config
+// export default defineNuxtConfig({
+//   compatibilityDate: '2025-07-15',
+//   devtools: { enabled: process.env.NODE_ENV !== 'production' },
+//   nitro: { preset: 'node-server' }
+// })
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: process.env.NODE_ENV !== 'production' },
-  nitro: { preset: 'node-server' }
+  nitro: { preset: 'vercel' }
 })
