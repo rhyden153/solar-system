@@ -1,3 +1,5 @@
 {
-  "framework": "nuxt"
+  "framework": "nuxt",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".vercel/output/static"
 }
