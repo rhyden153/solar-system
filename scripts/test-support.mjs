@@ -1,34 +1,20 @@
 import { readFile } from 'node:fs/promises'
 import { stripTypeScriptTypes } from 'node:module'
-import ts from 'typescript'
 
 const modules = new Map()
 async function sourceUrl(source, base) {
   let script = stripTypeScriptTypes(source)
-  const parsed = ts.createSourceFile(base.pathname, script, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
-  const imports = []
-  function visit(node) {
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-      if (node.moduleSpecifier) imports.push({ literal: node.moduleSpecifier, dynamic: false })
-    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-      imports.push({ literal: node.arguments[0], dynamic: true })
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(parsed)
-  for (const { literal, dynamic } of imports.sort((a, b) => b.literal.pos - a.literal.pos)) {
-    if (!ts.isStringLiteral(literal)) throw new Error('Test loader requires literal module specifiers')
-    const specifier = literal.text
+  for (const specifier of new Set([...script.matchAll(/from ['"]([^'"]+)['"]/g)].map(match => match[1]))) {
     let replacement
     if (specifier.startsWith('.')) {
       const dependency = new URL(specifier, base)
-      if (specifier.endsWith('.json')) replacement = `'${dependency.href}'${dynamic ? ", { with: { type: 'json' } }" : " with { type: 'json' }"}`
+      if (specifier.endsWith('.json')) replacement = `'${dependency.href}' with { type: 'json' }`
       else {
         if (!specifier.endsWith('.ts')) dependency.pathname += '.ts'
         replacement = `'${await moduleUrl(dependency)}'`
       }
     } else replacement = `'${import.meta.resolve(specifier)}'`
-    script = script.slice(0, literal.getStart(parsed)) + replacement + script.slice(literal.end)
+    script = script.replaceAll(`from '${specifier}'`, `from ${replacement}`).replaceAll(`from "${specifier}"`, `from ${replacement}`)
   }
   return `data:text/javascript;base64,${Buffer.from(script).toString('base64')}`
 }

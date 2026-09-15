@@ -10,8 +10,6 @@ const {
   binaryPrimaryMass,
   binaryCompanionMass,
   presetCatalog,
-  pendingPresetId,
-  presetError,
   manualPlanetCount,
   configOpen,
   configError,
@@ -84,11 +82,10 @@ function setStageElement(element: Element | ComponentPublicInstance | null) {
       <button class="configure-button" :class="{ active: activePresetId === 'custom' }" type="button" @click="openConfigurator"><span class="configure-plus">+</span><span><strong>Configure system</strong><small>{{ activePresetId === 'custom' ? 'Edit user system' : 'Build a user system' }}</small></span></button>
       <div class="sidebar-section-label presets-label">PRESETS <span>{{ presetCatalog.length }}</span></div>
       <div class="preset-list">
-        <button v-for="preset in presetCatalog" :key="preset.id" class="preset-item" :class="{ selected: activePresetId === preset.id }" :aria-busy="pendingPresetId === preset.id" type="button" @click="selectPreset(preset.id)">
-          <span class="preset-marker" :class="`marker-${preset.id}`"></span><span class="preset-copy"><strong>{{ preset.name }}</strong><small aria-live="polite">{{ pendingPresetId === preset.id ? 'Loading mission...' : preset.summary }}</small></span><span v-if="activePresetId === preset.id" class="preset-active-line"></span>
+        <button v-for="preset in presetCatalog" :key="preset.id" class="preset-item" :class="{ selected: activePresetId === preset.id }" type="button" @click="selectPreset(preset.id)">
+          <span class="preset-marker" :class="`marker-${preset.id}`"></span><span class="preset-copy"><strong>{{ preset.name }}</strong><small>{{ preset.summary }}</small></span><span v-if="activePresetId === preset.id" class="preset-active-line"></span>
         </button>
-      </div>
-      <p v-if="presetError" class="preset-error" role="alert">{{ presetError }}</p>
+      </div>      
       <div class="sidebar-bottom"><div class="engine-label">PHYSICS ENGINE</div><div class="engine-row"><span>Integrator</span><strong>{{ activePresetId === 'apollo11' ? 'Reconstruction' : isReplay ? 'JPL Horizons' : 'Velocity Verlet' }}</strong></div><div class="engine-row"><span>Gravity</span><strong>{{ isReplay ? 'Ephemeris replay' : 'Newtonian' }}</strong></div><div class="engine-row"><span>Frame</span><strong>{{ activeReplayView ? 'Local projection' : isReplay ? 'J2000 projection' : '2D planar' }}</strong></div><div class="sidebar-footer"><span class="live-pip"></span>Local session</div></div>
     </aside>
 

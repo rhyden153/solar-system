@@ -16,7 +16,7 @@ for (const [id, replay] of Object.entries({ cassini:cassiniReplay, rosetta:roset
       if(i)assert.ok(rows[i][0]>rows[i-1][0])
     }
   }
-  await lab.selectPreset(id)
+  lab.selectPreset(id)
   assert.equal(lab.selectedBodyId.value,id)
   assert.equal(lab.simulation.value.bodies.length,replay.bodies.length)
   assert.equal(lab.activeReplayView.value.id,replay.views[0].id)

@@ -41,7 +41,7 @@ assert.deepEqual(sampleVoyagerBody('voyager1', 100), sampleVoyagerBody('voyager1
 // Exercise the actual app's preset selection, playback, seeking, and reset logic.
 const lab = await loadLaboratory()
 assert.ok(!lab.presetCatalog.some(preset => preset.id === 'slingshot'))
-await lab.selectPreset('voyager1')
+lab.selectPreset('voyager1')
 assert.equal(lab.simulation.value.bodies.length, 10)
 assert.equal(lab.selectedBodyId.value, 'voyager2')
 assert.ok(!lab.simulation.value.bodies.some(body => body.id === 'voyager1'))
@@ -105,7 +105,7 @@ const pointer = (x, y, button = 2, buttons = 2, pointerId = 7) => ({
 const project = body => lab.worldToScreen(body.position, 800, 500, lab.getFocusPoint())
 const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`)
 for (const preset of ['solar', 'comets', 'voyager1', 'galileo']) {
-  await lab.selectPreset(preset)
+  lab.selectPreset(preset)
   lab.isRunning.value = false
   const selectedBefore = lab.selectedBodyId.value
   const sun = lab.simulation.value.bodies.find(body => body.id === 'sun')

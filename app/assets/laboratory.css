@@ -20,11 +20,9 @@ button { font: inherit; }
 .nav-dot { width: 6px; height: 6px; border-radius: 50%; background: #64aca6; box-shadow: 0 0 0 3px rgba(100, 172, 166, .1); }
 .nav-status { margin-left: auto; color: #64aca6; font: 9px Consolas, monospace; letter-spacing: 1px; }
 .preset-list { display: flex; flex-direction: column; gap: 3px; }
-.preset-item { min-width: 0; min-height: 57px; display: flex; align-items: center; gap: 10px; position: relative; padding: 8px 12px; border-radius: 5px; transition: background .2s, color .2s; }
+.preset-item { min-height: 57px; display: flex; align-items: center; gap: 10px; position: relative; padding: 8px 12px; border-radius: 5px; transition: background .2s, color .2s; }
 .preset-item:hover { background: #121d22; }
 .preset-item.selected { background: #17252a; color: #eef4f1; }
-.preset-item[aria-busy="true"] { background: #17252a; }
-.preset-error { margin: 10px 12px; color: #df9b77; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .preset-marker { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #80919a; box-shadow: 0 0 0 4px rgba(128, 145, 154, .08); }
 .marker-solar { background: #e7b441; box-shadow: 0 0 0 4px rgba(231, 180, 65, .09); }
 .marker-comets { background: #a99bd2; box-shadow: 0 0 0 4px rgba(169, 155, 210, .09); }
