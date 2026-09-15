@@ -15,6 +15,15 @@ export function useLaboratory({ lifecycle = true } = {}) {
   const binaryCompanionMass = ref(0.65)
 
   const presetCatalog = createPresetCatalog(() => [binaryPrimaryMass.value, binaryCompanionMass.value])
+  const pendingPresetId = ref('')
+  const presetError = ref('')
+  let presetRequest = 0
+
+  function cancelPresetLoad() {
+    presetRequest += 1
+    pendingPresetId.value = ''
+    presetError.value = ''
+  }
 
   const manualStar = ref<EditableBody>(createManualStar())
   const manualPlanets = ref<EditableBody[]>([0, 1, 2].map((index) => createManualPlanet(index)))
@@ -161,6 +170,7 @@ export function useLaboratory({ lifecycle = true } = {}) {
   }
 
   function openConfigurator() {
+    cancelPresetLoad()
     isRunning.value = false
     configError.value = ''
     configOpen.value = true
@@ -188,6 +198,7 @@ export function useLaboratory({ lifecycle = true } = {}) {
       return
     }
     const seeds = editableBodies.value.map(editableBodyToSeed)
+    cancelPresetLoad()
     manualViewScale.value = calculateManualViewScale(seeds)
     activePresetId.value = 'custom'
     simulation.value = createCurrentSimulation()
@@ -200,7 +211,25 @@ export function useLaboratory({ lifecycle = true } = {}) {
     isRunning.value = false
   }
 
-  function selectPreset(id: string) {
+  async function selectPreset(id: string) {
+    const preset = presetCatalog.find(preset => preset.id === id)
+    if (!preset) return
+    cancelPresetLoad()
+    const request = presetRequest
+    if (preset.loadReplay && !preset.replay) {
+      pendingPresetId.value = id
+      try {
+        await preset.loadReplay()
+      } catch {
+        if (request === presetRequest) {
+          pendingPresetId.value = ''
+          presetError.value = `${preset.name} could not load. Select it to retry, or refresh the page.`
+        }
+        return
+      }
+      if (request !== presetRequest) return
+      pendingPresetId.value = ''
+    }
     activePresetId.value = id
     replayViewId.value = ''
     simulation.value = createCurrentSimulation()
@@ -303,13 +332,15 @@ export function useLaboratory({ lifecycle = true } = {}) {
       resizeCanvas()
       animationFrame = window.requestAnimationFrame(animate)
   })
-  onUnmounted(() => { stopCanvasPan(); window.removeEventListener('blur', stopCanvasPan); window.removeEventListener('keydown', handleKeyboardShortcut); window.cancelAnimationFrame(animationFrame); resizeObserver?.disconnect() })
+  onUnmounted(() => { cancelPresetLoad(); stopCanvasPan(); window.removeEventListener('blur', stopCanvasPan); window.removeEventListener('keydown', handleKeyboardShortcut); window.cancelAnimationFrame(animationFrame); resizeObserver?.disconnect() })
   }
 
   return {
     binaryPrimaryMass,
     binaryCompanionMass,
     presetCatalog,
+    pendingPresetId,
+    presetError,
     manualPlanetCount,
     configOpen,
     configError,

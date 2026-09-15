@@ -7,13 +7,14 @@
     "dev": "nuxt dev",
     "generate": "node --max-old-space-size=4096 ./node_modules/nuxt/bin/nuxt.mjs generate",
     "preview": "nuxi preview --host 0.0.0.0",
-    "start": "npx serve dist",
+  "start": "npx serve .output/public",
     "postinstall": "nuxt prepare",
-    "test": "node scripts/test-core.mjs && node scripts/test-components.mjs && node scripts/test-voyager.mjs && node scripts/test-galileo.mjs && node scripts/test-presets.mjs",
-    "typecheck": "nuxt typecheck"
+    "test": "node scripts/test-core.mjs && node scripts/test-components.mjs && node scripts/test-voyager.mjs && node scripts/test-galileo.mjs && node scripts/test-presets.mjs && node scripts/test-loading.mjs",
+    "typecheck": "nuxt typecheck",
+    "test:deployment": "node scripts/test-deployment.mjs"
   },
   "engines": {
-    "node": "^22.19.0 || ^24.11.0 || >=26.0.0"
+    "node": "^24.11.0"
   },
   "dependencies": {
     "nuxt": "^4.5.2",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.4",
+    "serve": "^14.2.6",
     "typescript": "~5.9.3",
     "vue-tsc": "^3.3.11"
   }
