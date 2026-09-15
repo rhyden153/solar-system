@@ -1,5 +1,21 @@
 {
-  "framework": "nuxt",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nuxtjs",
+  "installCommand": "npm ci",
   "buildCommand": "npm run build",
-  "outputDirectory": ".vercel/output/static"
+  "outputDirectory": ".output/public",
+  "headers": [
+    {
+      "source": "/_nuxt/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/_nuxt/builds/latest.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    }
+  ]
 }

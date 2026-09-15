@@ -39,9 +39,9 @@ export type Preset = {
   focusBody?: string
   guides: OrbitGuide[]
   replay?: MissionReplay
+  loadReplay?: () => Promise<MissionReplay>
   inspectorNote?: string
   trailPoints?: number
   createBodies: () => BodySeed[]
 }
 export type Simulation = { bodies: Body[]; elapsed: number; steps: number; initialEnergy: number; sunId?: string; previousSunDistances: Map<string, number> }
-
