@@ -1,0 +1,12 @@
+{
+  "name": "Orbital Lab",
+  "short_name": "Orbital Lab",
+  "description": "An interactive orbital mechanics laboratory with N-body simulations and spacecraft mission replays.",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "theme_color": "#080c10",
+  "background_color": "#080c10",
+  "display": "standalone"
+}

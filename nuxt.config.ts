@@ -17,7 +17,16 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'Orbital Lab',
-      meta: [{ name: 'description', content: 'An interactive orbital mechanics laboratory with N-body simulations and spacecraft mission replays.' }]
+      meta: [
+        { name: 'description', content: 'An interactive orbital mechanics laboratory with N-body simulations and spacecraft mission replays.' },
+        { name: 'theme-color', content: '#080c10' }
+      ],
+      link: [
+        { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
+        { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+        { rel: 'manifest', href: '/site.webmanifest' }
+      ]
     }
   }
 })
