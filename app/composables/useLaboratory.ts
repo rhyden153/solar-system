@@ -1,14 +1,14 @@
 import type { Vector, EditableBody, Preset, Simulation } from '../physics/types'
-import { vector, add, subtract, scale, magnitude } from '../physics/vector'
+import { vector, subtract, magnitude } from '../physics/vector'
 import { createSimulation, integratePhysics, totalEnergy } from '../physics/engine'
 import { createManualStar, createManualPlanet, editableBodyToSeed, calculateManualViewScale } from '../presets/initial-conditions'
 import { formatYears } from '../utils/format'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from 'vue'
 import { createPresetCatalog } from '../presets/catalog'
 import { drawScene, getBodyDisplayRadius, type Scene } from '../rendering/scene'
 import { useCamera } from '../composables/useCamera'
 import { AU_KM } from '../utils/units'
-import { createReplayBodies } from '../missions/playback'
+import { createReplayBodies, updateReplayBodies } from '../missions/playback'
 
 export function useLaboratory({ lifecycle = true } = {}) {
   const binaryPrimaryMass = ref(1)
@@ -33,7 +33,26 @@ export function useLaboratory({ lifecycle = true } = {}) {
   const configError = ref('')
   const showInspector = ref(true)
   const showTelemetry = ref(true)
-  const focusMode = ref(false)
+  const isFullscreen = ref(false)
+  const fullscreenPanel = ref<HTMLElement | null>(null)
+  const fullscreenError = ref('')
+
+  function syncFullscreen() {
+    isFullscreen.value = !!fullscreenPanel.value && document.fullscreenElement === fullscreenPanel.value
+  }
+
+  async function toggleFullscreen() {
+    const panel = fullscreenPanel.value
+    if (!panel) return
+    fullscreenError.value = ''
+    try {
+      if (document.fullscreenElement === panel) await document.exitFullscreen()
+      else await panel.requestFullscreen()
+      syncFullscreen()
+    } catch {
+      fullscreenError.value = 'Fullscreen is unavailable. Please try again.'
+    }
+  }
   const editableBodies = computed(() => [manualStar.value, ...manualPlanets.value])
   const customPreset = computed<Preset>(() => ({
     id: 'custom',
@@ -51,7 +70,8 @@ export function useLaboratory({ lifecycle = true } = {}) {
   const activePresetId = ref('solar')
   const activePreset = computed(() => activePresetId.value === 'custom' ? customPreset.value : (presetCatalog.find((preset) => preset.id === activePresetId.value) ?? presetCatalog[0]!))
   const replayViewId = ref('')
-  const simulation = ref<Simulation>(createCurrentSimulation())
+  // Physics and mission tracks stay outside Vue's deep proxy graph.
+  const simulation = shallowRef<Simulation>(createCurrentSimulation())
   const isRunning = ref(true)
   const speed = ref(1)
   const showTrails = ref(true)
@@ -63,6 +83,9 @@ export function useLaboratory({ lifecycle = true } = {}) {
   let animationFrame = 0
   let resizeObserver: ResizeObserver | undefined
   let lastFrame = 0
+  let needsRedraw = true
+  let contextCanvas: HTMLCanvasElement | null = null
+  let canvasContext: CanvasRenderingContext2D | null = null
 
   function createCurrentSimulation() {
     const preset = activePreset.value
@@ -72,12 +95,14 @@ export function useLaboratory({ lifecycle = true } = {}) {
 
   function integrate(dt: number) {
     if (activeReplay.value) {
-      updateMissionPlayback(simulation.value.elapsed + dt)
+      updateMissionPlayback(simulation.value.elapsed + dt, false)
       simulation.value.steps += 1
       if (simulation.value.elapsed >= activeReplay.value.years) isRunning.value = false
     } else {
       integratePhysics(simulation.value, dt, activePreset.value.trailPoints)
     }
+    triggerRef(simulation)
+    needsRedraw = true
   }
 
   function animate(timestamp: number) {
@@ -88,11 +113,15 @@ export function useLaboratory({ lifecycle = true } = {}) {
       const dt = activePreset.value.dt * Math.min(speed.value, 1)
       for (let step = 0; step < substeps; step += 1) integrate(dt)
     }
-    draw()
+    if (needsRedraw) draw()
     animationFrame = window.requestAnimationFrame(animate)
   }
 
-  const selectedBody = computed(() => simulation.value.bodies.find((body) => body.id === selectedBodyId.value) ?? simulation.value.bodies[0])
+  const selectedBody = computed(() => {
+    const body = simulation.value.bodies.find(body => body.id === selectedBodyId.value) ?? simulation.value.bodies[0]
+    // A small snapshot gives the inspector a changed prop once per UI update.
+    return body ? { ...body, position: { ...body.position }, velocity: { ...body.velocity } } : undefined
+  })
   const activeReplay = computed(() => activePreset.value.replay)
   const isReplay = computed(() => !!activeReplay.value)
   const activeReplayView = computed(() => activeReplay.value?.views?.find(view => view.id === replayViewId.value) ?? activeReplay.value?.views?.[0])
@@ -103,13 +132,13 @@ export function useLaboratory({ lifecycle = true } = {}) {
     return replay && body && body.id in replay.tracks ? replay.sample(body.id, simulation.value.elapsed) : null
   })
 
-  function updateMissionPlayback(years: number) {
+  function updateMissionPlayback(years: number, notify = true) {
     const replay = activeReplay.value
     if (!replay) return
     simulation.value.elapsed = Math.max(0, Math.min(replay.years, years))
-    // Rebuild active bodies so seeking before a spacecraft's departure removes it.
-    const bodies = createReplayBodies(replay, simulation.value.elapsed, replayViewId.value)
-    simulation.value.bodies = bodies.map(body => ({ ...body, trail: [], initialPosition: { ...body.position }, initialVelocity: { ...body.velocity } }))
+    updateReplayBodies(simulation.value.bodies, replay, simulation.value.elapsed, replayViewId.value)
+    if (notify) triggerRef(simulation)
+    needsRedraw = true
     if (!simulation.value.bodies.some(body => body.id === selectedBodyId.value)) selectedBodyId.value = replay.selectedBody
   }
   function seekMission(years: number, spacecraft?: string) {
@@ -140,8 +169,10 @@ export function useLaboratory({ lifecycle = true } = {}) {
     if (activePresetId.value === 'figure-eight') return size * 0.4 * zoomLevel.value
     if (isGalileo.value) return size * 0.42 / activePreset.value.viewScale * zoomLevel.value
     if (isReplay.value) {
-      const probes = simulation.value.bodies.filter(body => body.role === 'Spacecraft')
-      const extent = Math.max(12, ...probes.flatMap(body => [Math.abs(body.position.x), Math.abs(body.position.y)]))
+      let extent = 12
+      for (const body of simulation.value.bodies) {
+        if (body.role === 'Spacecraft') extent = Math.max(extent, Math.abs(body.position.x), Math.abs(body.position.y))
+      }
       return Math.min(canvasSize.value.width || 800, canvasSize.value.height || 500) * 0.42 / extent * zoomLevel.value
     }
     return activePreset.value.viewScale * zoomLevel.value
@@ -205,7 +236,6 @@ export function useLaboratory({ lifecycle = true } = {}) {
     selectedBodyId.value = manualStar.value.id
     zoomLevel.value = 1
     recenterCamera()
-    focusMode.value = true
     configOpen.value = false
     configError.value = ''
     isRunning.value = false
@@ -255,24 +285,26 @@ export function useLaboratory({ lifecycle = true } = {}) {
     updateMissionPlayback(simulation.value.elapsed)
     recenterCamera()
   }
-  function formatRuler() {
+  const rulerText = computed(() => {
     const distance = 120 / displayScale.value
     return activeReplayView.value ? `${(distance * AU_KM).toLocaleString(undefined, { maximumFractionDigits: distance * AU_KM < 10 ? 1 : 0 })} km` : `${distance.toFixed(displayScale.value > 1000 ? 4 : 2)} AU`
-  }
+  })
 
   function stepOnce() { integrate(activePreset.value.dt); draw() }
 
   function handleKeyboardShortcut(event: KeyboardEvent) {
     const target = event.target as { closest?: (selector: string) => Element | null } | null
-    if (event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey || target?.closest?.('input, textarea, select, button, a, [contenteditable="true"]')) return
+    const fullscreenShortcut = event.key.toLowerCase() === 'f'
+    if (event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey || target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return
+    if (!fullscreenShortcut && target?.closest?.('button, a')) return
     if (event.key === ' ' || event.code === 'Space') {
       if (!event.repeat) isRunning.value = !isRunning.value
     } else if (event.key === '+' || event.key === '=' || event.code === 'NumpadAdd') {
       speed.value = Math.min(20, Math.round(speed.value) + 1)
     } else if (event.key === '-' || event.key === '_' || event.code === 'NumpadSubtract') {
       speed.value = Math.max(1, Math.round(speed.value) - 1)
-    } else if (event.key === 'Enter' && !event.repeat) {
-      focusMode.value = !focusMode.value
+    } else if (event.key.toLowerCase() === 'f' && !event.repeat) {
+      void toggleFullscreen()
     } else return
     event.preventDefault()
   }
@@ -284,12 +316,16 @@ export function useLaboratory({ lifecycle = true } = {}) {
       selectedBodyId: selectedBodyId.value }
   }
   function draw() {
+    needsRedraw = false
     const render = getCanvasContext()
     if (render?.width && render.height) drawScene(render.context, render.width, render.height, renderScene())
   }
   function getCanvasContext() {
-    if (!canvas.value) return null
-    const context = canvas.value.getContext('2d')
+    if (contextCanvas !== canvas.value) {
+      contextCanvas = canvas.value
+      canvasContext = contextCanvas?.getContext('2d') ?? null
+    }
+    const context = canvasContext
     if (!context) return null
     context.setTransform(canvasSize.value.dpr, 0, 0, canvasSize.value.dpr, 0, 0)
     return { context, width: canvasSize.value.width, height: canvasSize.value.height }
@@ -299,9 +335,16 @@ export function useLaboratory({ lifecycle = true } = {}) {
     if (activeReplayView.value) return activeReplayView.value.center
     const focus = cameraTargetId.value ? simulation.value.bodies.find((body) => body.id === cameraTargetId.value) : undefined
     if (focus) return focus.position
-    const totalMass = simulation.value.bodies.reduce((sum, body) => sum + body.mass, 0)
-    const center = simulation.value.bodies.reduce((sum, body) => add(sum, scale(body.position, body.mass)), vector())
-    return scale(center, 1 / totalMass)
+    let totalMass = 0
+    let x = 0
+    let y = 0
+    for (const body of simulation.value.bodies) {
+      totalMass += body.mass
+      x += body.position.x * body.mass
+      y += body.position.y * body.mass
+    }
+    const inverseMass = 1 / totalMass
+    return vector(x * inverseMass, y * inverseMass)
   }
 
   function resizeCanvas() {
@@ -318,21 +361,24 @@ export function useLaboratory({ lifecycle = true } = {}) {
     const rect = canvas.value.getBoundingClientRect()
     const click = { x: event.clientX - rect.left, y: event.clientY - rect.top }
     const focus = getFocusPoint()
+    const scene = renderScene()
     let nearest: { id: string; distance: number } | undefined
-    simulation.value.bodies.forEach((body) => { const point = worldToScreen(body.position, canvasSize.value.width, canvasSize.value.height, focus); const distance = Math.hypot(point.x - click.x, point.y - click.y); if (distance < Math.max(getBodyDisplayRadius(body, renderScene()) + 12, 18) && (!nearest || distance < nearest.distance)) nearest = { id: body.id, distance } })
+    simulation.value.bodies.forEach((body) => { const point = worldToScreen(body.position, canvasSize.value.width, canvasSize.value.height, focus); const distance = Math.hypot(point.x - click.x, point.y - click.y); if (distance < Math.max(getBodyDisplayRadius(body, scene) + 12, 18) && (!nearest || distance < nearest.distance)) nearest = { id: body.id, distance } })
     if (nearest) selectedBodyId.value = nearest.id
   }
 
   if (lifecycle) {
+    watch([simulation, activePreset, activeReplayView, displayScale, cameraOffset, showGuides, showTrails, selectedBodyId, canvasSize], () => { needsRedraw = true }, { flush: 'sync' })
     onMounted(() => {
       window.addEventListener('blur', stopCanvasPan)
       window.addEventListener('keydown', handleKeyboardShortcut)
+      document.addEventListener('fullscreenchange', syncFullscreen)
       resizeObserver = new ResizeObserver(resizeCanvas)
       if (stage.value) resizeObserver.observe(stage.value)
       resizeCanvas()
       animationFrame = window.requestAnimationFrame(animate)
   })
-  onUnmounted(() => { cancelPresetLoad(); stopCanvasPan(); window.removeEventListener('blur', stopCanvasPan); window.removeEventListener('keydown', handleKeyboardShortcut); window.cancelAnimationFrame(animationFrame); resizeObserver?.disconnect() })
+  onUnmounted(() => { document.removeEventListener('fullscreenchange', syncFullscreen); cancelPresetLoad(); stopCanvasPan(); window.removeEventListener('blur', stopCanvasPan); window.removeEventListener('keydown', handleKeyboardShortcut); window.cancelAnimationFrame(animationFrame); resizeObserver?.disconnect(); canvasContext = null; contextCanvas = null })
   }
 
   return {
@@ -346,7 +392,10 @@ export function useLaboratory({ lifecycle = true } = {}) {
     configError,
     showInspector,
     showTelemetry,
-    focusMode,
+    isFullscreen,
+    fullscreenPanel,
+    fullscreenError,
+    toggleFullscreen,
     editableBodies,
     activePresetId,
     activePreset,
@@ -382,7 +431,7 @@ export function useLaboratory({ lifecycle = true } = {}) {
     resetSimulation,
     updateBinaryMasses,
     setReplayView,
-    formatRuler,
+    rulerText,
     stepOnce,
     handleKeyboardShortcut,
     draw,

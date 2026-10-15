@@ -17,13 +17,13 @@ assert.ok(inspector.includes('1.000 AU'))
 assert.ok(inspector.includes('User parameters are active'))
 assert.ok(inspector.includes('body-row selected'))
 
-const transport = await render('TransportControls', { isRunning: true, speed: 2, showTrails: true, showGuides: true, showInspector: true, showTelemetry: true, focusMode: false, isReplay: false, zoomLevel: 1 })
+const transport = await render('TransportControls', { isRunning: true, speed: 2, showTrails: true, showGuides: true, showInspector: true, showTelemetry: true, isReplay: false, zoomLevel: 1 })
 assert.ok(transport.includes('Pause'))
 assert.ok(transport.includes('2x'))
 assert.ok(transport.includes('Metrics'))
 assert.ok(transport.includes('100%'))
 assert.ok(transport.includes('Run or pause (Space)'))
-assert.ok(transport.includes('Toggle canvas zoom (Enter)'))
+assert.ok(!transport.includes('Zoom canvas'))
 
 const timeline = await render('MissionTimeline', {
   title: 'Test mission', elapsed: 0, dt: 0.01,

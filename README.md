@@ -89,7 +89,8 @@ to plot NASA/JPL Horizons trajectories. Use the mission date slider or milestone
 buttons to explore the path. Galileo includes its Venus and Earth gravity
 assists, the Gaspra and Ida asteroid encounters, and the atmospheric probe’s
 independent path after release. Right-drag to pan, scroll to zoom, and use
-**Recenter** to restore the default center.
+**Recenter** to restore the default center. Click the fullscreen icon on the
+orbit map or press **F** to toggle fullscreen; **Escape** also exits fullscreen.
 
 See [trajectory data notes](app/data/README.md) for sources, sampling, and the
 distinction between tracking data and predicted trajectories.
@@ -130,6 +131,23 @@ Horizons options without network calls, mission geometry, playback, canvas drawi
 and camera interactions, plus lazy loading, selection races, caching, and download
 failure recovery. Integration tests construct `useLaboratory` with lifecycle
 registration disabled; they do not extract code from Vue component source.
+The runtime tests also mount through Vue to verify live inspector updates, paused
+redraws, fullscreen state, context reuse, and lifecycle cleanup.
 The deployment check runs against the built output to verify static files, the
 absence of a runtime server and speculative downloads, and a 300 kB startup
 JavaScript budget (before compression).
+
+## Runtime performance
+
+Simulation bodies and trails stay outside Vue's deep reactivity. The controller
+notifies Vue after integration or seeking, and sends the inspector a small selected
+body snapshot. Physics reuses acceleration buffers and full trail points; mission
+playback updates surviving bodies in place. Paused canvases redraw when their scene
+or camera changes. Route and trail windows use binary search over sorted samples.
+
+Run `npm run benchmark` for a deterministic 10,000-step workload per preset. It
+reports elapsed step time, minor garbage collections, heap deltas, and object replacements.
+Timing excludes Canvas and browser DOM rendering; heap deltas are not peak memory.
+Set `SOLAR_SOURCE_ROOT` to a saved source tree to compare the same workload against
+another revision. Benchmark results depend on Node's garbage collector and machine
+load, so compare repeated runs rather than a fixed speedup.

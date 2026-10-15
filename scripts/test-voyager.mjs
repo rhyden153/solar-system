@@ -188,14 +188,34 @@ assert.equal(lab.speed.value, 1, 'Speed is clamped at the slider minimum')
 lab.speed.value = 20
 shortcut('=', { code: 'Equal' })
 assert.equal(lab.speed.value, 20, 'Speed is clamped at the slider maximum')
-lab.focusMode.value = false
-assert.equal(shortcut('Enter'), true)
-assert.equal(lab.focusMode.value, true)
-shortcut('Enter')
-assert.equal(lab.focusMode.value, false)
+let fullscreenRequests = 0
+let fullscreenExits = 0
+const previousDocument = globalThis.document
+const panel = { async requestFullscreen() { fullscreenRequests++; globalThis.document.fullscreenElement = this } }
+globalThis.document = { fullscreenElement: null, async exitFullscreen() { fullscreenExits++; this.fullscreenElement = null } }
+lab.fullscreenPanel.value = panel
+assert.equal(shortcut('Enter'), false, 'Enter no longer expands the canvas')
+assert.equal(shortcut('f'), true)
+await new Promise(resolve => setImmediate(resolve))
+assert.equal(lab.isFullscreen.value, true)
+assert.equal(shortcut('f', { repeat: true }), false)
+assert.equal(fullscreenRequests, 1, 'Held F does not toggle repeatedly')
+assert.equal(shortcut('F'), true)
+await new Promise(resolve => setImmediate(resolve))
+assert.equal(lab.isFullscreen.value, false)
+assert.equal(fullscreenExits, 1)
+assert.equal(shortcut('f', { target: { closest: () => ({}) } }), false)
+assert.equal(shortcut('f', { ctrlKey: true }), false)
+assert.equal(fullscreenRequests, 1, 'Editable fields and modified keys do not enter fullscreen')
+lab.fullscreenPanel.value = { async requestFullscreen() { throw new Error('Denied') } }
+await lab.toggleFullscreen()
+assert.equal(lab.isFullscreen.value, false)
+assert.ok(lab.fullscreenError.value.includes('unavailable'), 'Fullscreen rejection is handled')
+lab.fullscreenPanel.value = null
+globalThis.document = previousDocument
 const inputTarget = { closest: () => ({}) }
 assert.equal(shortcut(' ', { code: 'Space', target: inputTarget }), false)
 assert.equal(lab.isRunning.value, true, 'Shortcuts are ignored while using an interactive control')
 assert.equal(shortcut(' ', { code: 'Space', ctrlKey: true }), false)
 assert.equal(lab.isRunning.value, true, 'Modified shortcuts are left to the browser')
-console.log('Space, speed, zoom, repeat, bounds, and editable-control keyboard shortcuts passed.')
+console.log('Space, speed, fullscreen, repeat, bounds, and editable-control keyboard shortcuts passed.')

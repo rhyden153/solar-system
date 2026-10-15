@@ -17,7 +17,10 @@ const {
   configError,
   showInspector,
   showTelemetry,
-  focusMode,
+  isFullscreen,
+  fullscreenPanel,
+  fullscreenError,
+  toggleFullscreen,
   editableBodies,
   activePresetId,
   activePreset,
@@ -50,7 +53,7 @@ const {
   resetSimulation,
   updateBinaryMasses,
   setReplayView,
-  formatRuler,
+  rulerText,
   stepOnce,
   handleCanvasClick,
   zoomLevel,
@@ -69,6 +72,10 @@ function setCanvasElement(element: Element | ComponentPublicInstance | null) {
   canvas.value = element as HTMLCanvasElement | null
 }
 
+function setFullscreenPanelElement(element: Element | ComponentPublicInstance | null) {
+  fullscreenPanel.value = element as HTMLElement | null
+}
+
 function setStageElement(element: Element | ComponentPublicInstance | null) {
   stage.value = element as HTMLElement | null
 }
@@ -76,7 +83,7 @@ function setStageElement(element: Element | ComponentPublicInstance | null) {
 
 
 <template>
-  <div class="app-shell" :class="{ 'focus-mode': focusMode }">
+  <div class="app-shell">
     <aside class="sidebar">
       <div class="brand-block"><div class="brand-mark" aria-hidden="true"><span></span><i></i></div><div><div class="brand-name">ORBITAL LAB</div><div class="brand-subtitle">N-BODY SIMULATOR</div></div></div>
       <div class="sidebar-section-label">WORKSPACE</div>
@@ -98,7 +105,7 @@ function setStageElement(element: Element | ComponentPublicInstance | null) {
         <div class="topbar-meta"><div class="meta-item"><span>{{ isReplay ? 'MISSION DATE' : 'SIM TIME' }}</span><strong>{{ activeReplay ? activeReplay.date(simulation.elapsed) : formatYears(simulation.elapsed) }}</strong></div><div class="meta-divider"></div><div class="meta-item"><span>STATUS</span><strong class="status-live"><i></i>{{ statusText }}</strong></div></div>
       </header>
 
-      <TransportControls v-model:is-running="isRunning" v-model:speed="speed" v-model:show-trails="showTrails" v-model:show-guides="showGuides" v-model:show-inspector="showInspector" v-model:show-telemetry="showTelemetry" v-model:focus-mode="focusMode" :is-replay="isReplay" :zoom-level="zoomLevel" @step="stepOnce" @reset="resetSimulation" @zoom="setZoom" />
+      <TransportControls v-model:is-running="isRunning" v-model:speed="speed" v-model:show-trails="showTrails" v-model:show-guides="showGuides" v-model:show-inspector="showInspector" v-model:show-telemetry="showTelemetry" :is-replay="isReplay" :zoom-level="zoomLevel" @step="stepOnce" @reset="resetSimulation" @zoom="setZoom" />
 
       <section v-if="activePresetId === 'binary'" class="binary-controls" aria-label="Relative star masses">
         <span class="section-kicker">RELATIVE STAR MASSES</span>
@@ -107,19 +114,19 @@ function setStageElement(element: Element | ComponentPublicInstance | null) {
         <small>Changing a mass starts a new circular orbit.</small>
       </section>
 
-      <div class="workspace-grid" :class="{ 'single-column': !showInspector || focusMode }">
-        <section class="stage-panel">
-          <div class="stage-header"><div><span class="section-kicker">ORBIT MAP</span><span class="stage-coordinate">/ {{ activeReplayView ? activeReplayView.frame : activePreset.focusBody ? 'FOCUS: ' + focusBodyName.toUpperCase() : 'BARYCENTRIC FRAME' }}</span></div><div class="stage-header-right"><button class="secondary-button recenter-button" type="button" :disabled="!isPanned" title="Return to the default center" @click="recenterCamera">Recenter</button><div v-if="activeReplay?.views" class="camera-switch" role="group" aria-label="Mission view"><button v-for="view in activeReplay.views" :key="view.id" type="button" :class="{ selected: view.id === activeReplayView?.id }" :aria-pressed="view.id === activeReplayView?.id" @click="setReplayView(view.id)">{{ view.label }}</button></div><span class="axis-key"><i class="axis-x"></i>X</span><span class="axis-key"><i class="axis-y"></i>Y</span><span class="stage-unit">{{ activeReplayView ? 'km' : 'AU / yr' }}</span></div></div>
-          <div :ref="setStageElement" class="canvas-wrap" :class="{ panning: canvasPan }"><canvas :ref="setCanvasElement" @click="handleCanvasClick" @wheel="handleWheel" @contextmenu.prevent @pointerdown="startCanvasPan" @pointermove="moveCanvasPan" @pointerup="endCanvasPan" @pointercancel="endCanvasPan" @lostpointercapture="endCanvasPan"></canvas><div v-if="missionOutsideView" class="offscreen-notice">Spacecraft outside this view <button type="button" @click="setReplayView('system')">Show overview</button></div><div class="canvas-readout top-left"><span class="readout-label">N</span><strong>{{ simulation.bodies.length }}</strong><span class="readout-unit">BODIES</span></div><div class="canvas-readout top-right"><span class="readout-label">DT</span><strong>{{ activeReplayView ? Math.round(activePreset.dt * 365.25 * 86400) : activePreset.dt }}</strong><span class="readout-unit">{{ activeReplayView ? 'SEC / STEP' : 'YR / STEP' }}</span></div><div class="canvas-hint"><div>Right-drag to pan</div><div>Scroll to zoom <span></span> Click a body to inspect</div></div><div class="scale-ruler"><span>0</span><i></i><span>{{ formatRuler() }}</span></div></div>
-        <!--  <div class="stage-footer"><div class="footer-legend"><span><i class="legend-orbit"></i>{{ isReplay ? 'Reference orbits / mission route' : 'Calculated orbit' }}</span><span><i class="legend-trail"></i>Position trail</span></div><div class="footer-frame">{{ isPanned ? 'MANUAL PAN' : (activeReplayView ? activeReplayView.frame : isReplay ? 'SUN-CENTERED / J2000' : 'CENTER OF MASS LOCKED') }} <span class="live-pip"></span></div></div>-->
+      <div class="workspace-grid" :class="{ 'single-column': !showInspector }">
+        <section :ref="setFullscreenPanelElement" class="stage-panel">
+          <div class="stage-header"><div><span class="section-kicker">ORBIT MAP</span><span class="stage-coordinate">/ {{ activeReplayView ? activeReplayView.frame : activePreset.focusBody ? 'FOCUS: ' + focusBodyName.toUpperCase() : 'BARYCENTRIC FRAME' }}</span></div><div class="stage-header-right"><span v-if="fullscreenError" class="fullscreen-error" role="alert">{{ fullscreenError }}</span><button class="fullscreen-button" type="button" :title="isFullscreen ? 'Exit fullscreen (F / Esc)' : 'Enter fullscreen (F)'" :aria-label="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'" :aria-pressed="isFullscreen" aria-keyshortcuts="F" @click="toggleFullscreen"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path v-if="isFullscreen" d="M9 3v6H3m18 0h-6V3M3 15h6v6m6 0v-6h6" /><path v-else d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" /></svg></button><button class="secondary-button recenter-button" type="button" :disabled="!isPanned" title="Return to the default center" @click="recenterCamera">Recenter</button><div v-if="activeReplay?.views" class="camera-switch" role="group" aria-label="Mission view"><button v-for="view in activeReplay.views" :key="view.id" type="button" :class="{ selected: view.id === activeReplayView?.id }" :aria-pressed="view.id === activeReplayView?.id" @click="setReplayView(view.id)">{{ view.label }}</button></div><span class="axis-key"><i class="axis-x"></i>X</span><span class="axis-key"><i class="axis-y"></i>Y</span><span class="stage-unit">{{ activeReplayView ? 'km' : 'AU / yr' }}</span></div></div>
+          <div :ref="setStageElement" class="canvas-wrap" :class="{ panning: canvasPan }"><canvas :ref="setCanvasElement" @click="handleCanvasClick" @wheel="handleWheel" @contextmenu.prevent @pointerdown="startCanvasPan" @pointermove="moveCanvasPan" @pointerup="endCanvasPan" @pointercancel="endCanvasPan" @lostpointercapture="endCanvasPan"></canvas><div v-if="missionOutsideView" class="offscreen-notice">Spacecraft outside this view <button type="button" @click="setReplayView('system')">Show overview</button></div><div class="canvas-readout top-left"><span class="readout-label">N</span><strong>{{ simulation.bodies.length }}</strong><span class="readout-unit">BODIES</span></div><div class="canvas-readout top-right"><span class="readout-label">DT</span><strong>{{ activeReplayView ? Math.round(activePreset.dt * 365.25 * 86400) : activePreset.dt }}</strong><span class="readout-unit">{{ activeReplayView ? 'SEC / STEP' : 'YR / STEP' }}</span></div><div class="canvas-hint"><div>Right-drag to pan</div><div>Scroll to zoom <span></span> Click a body to inspect</div></div><div class="scale-ruler"><span>0</span><i></i><span>{{ rulerText }}</span></div></div>
         </section>
 
-        <BodyInspector v-if="showInspector && !focusMode" v-model:selected-id="selectedBodyId" :selected-body="selectedBody" :selected-mission-state="selectedMissionState" :selected-distance="selectedDistance" :replay="activeReplay" :preset="activePreset" :bodies="simulation.bodies" />
+        <BodyInspector v-if="showInspector" v-model:selected-id="selectedBodyId" :selected-body="selectedBody" :selected-mission-state="selectedMissionState" :selected-distance="selectedDistance" :replay="activeReplay" :preset="activePreset" :bodies="simulation.bodies" />
       </div>
 
       <MissionTimeline v-if="activeReplay" :replay="activeReplay" :title="activePreset.name" :elapsed="simulation.elapsed" :dt="activePreset.dt" @seek="seekMission" />
 
-      <section v-if="showTelemetry && !focusMode && !isReplay" class="telemetry-panel"><div class="telemetry-heading"><span class="section-kicker">RUN TELEMETRY</span><span class="telemetry-caption">Fixed timestep / conserved quantities</span></div><div class="telemetry-grid"><div class="telemetry-item"><span>INTEGRATION STEPS</span><strong>{{ simulation.steps.toLocaleString() }}</strong><small>iterations</small></div><div class="telemetry-item"><span>ENERGY DRIFT</span><strong :class="{ warning: Math.abs(energyDrift) > .01 }">{{ energyDrift >= 0 ? '+' : '' }}{{ energyDrift.toFixed(4) }}%</strong><small>relative to start</small></div><div class="telemetry-item"><span>TIME STEP</span><strong>{{ activePreset.dt }} yr</strong><small>{{ (activePreset.dt * 365.25).toFixed(1) }} days</small></div><div class="telemetry-item"><span>MODEL</span><strong>N-BODY</strong><small>pairwise gravity</small></div><div class="telemetry-health"><span class="health-dot"></span><div><strong>Numerically stable</strong><small>Energy remains bounded in this preset</small></div></div></div></section>
+      <section v-if="showTelemetry && !isReplay" class="telemetry-panel"><div class="telemetry-heading"><span class="section-kicker">RUN TELEMETRY</span><span class="telemetry-caption">Fixed timestep / conserved quantities</span></div><div class="telemetry-grid"><div class="telemetry-item"><span>INTEGRATION STEPS</span><strong>{{ simulation.steps.toLocaleString() }}</strong><small>iterations</small></div><div class="telemetry-item"><span>ENERGY DRIFT</span><strong :class="{ warning: Math.abs(energyDrift) > .01 }">{{ energyDrift >= 0 ? '+' : '' }}{{ energyDrift.toFixed(4) }}%</strong><small>relative to start</small></div><div class="telemetry-item"><span>TIME STEP</span><strong>{{ activePreset.dt }} yr</strong><small>{{ (activePreset.dt * 365.25).toFixed(1) }} days</small></div><div class="telemetry-item"><span>MODEL</span><strong>N-BODY</strong><small>pairwise gravity</small></div><div class="telemetry-health"><span class="health-dot"></span><div><strong>Numerically stable</strong><small>Energy remains bounded in this preset</small></div></div></div></section>
+      <NeoGamesBanner class="collection-section" />
       <footer class="main-footer"><span>ORBITAL LAB / LABORATORY PRESET SERIES</span><span>G = 4pi^2 AU^3 M_sun^-1 yr^-2</span><span>v1.0.0</span></footer>
     </main>
     <SystemConfigurator v-if="configOpen" v-model:count="manualPlanetCount" :bodies="editableBodies" :error="configError" @close="closeConfigurator" @apply="applyManualSystem" @restore="restoreManualStarter" @resize="resizeManualPlanets" @edit="updateEditableBody" />

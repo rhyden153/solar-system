@@ -4,6 +4,7 @@ import { vector, magnitude } from '../physics/vector'
 import { AU_KM, DISPLAY_VALUE_SCALE } from '../utils/units'
 import { projectToScreen } from './projection'
 import { ringFlattening } from './saturn'
+import { trackBound } from '../utils/ephemeris'
 
 export type Scene = {
   simulation: Simulation
@@ -21,6 +22,8 @@ export type Scene = {
 const MIN_BODY_DISPLAY_RADIUS = 3
 const MAX_BODY_DISPLAY_RADIUS = 24
 const BODY_RADIUS_SCALE = 0.9
+const SATURN_RINGS = [[74658, 92000, '#89775788'], [92000, 117580, '#c4b18ab0'], [122170, 136775, '#a99b7d99']] as const
+const ZERO = { x: 0, y: 0 }
 
 export function getBodyDisplayRadius(body: Body, scene: Scene) {
   if (scene.view && body.radiusKm) return Math.max(3, body.radiusKm / AU_KM * scene.displayScale)
@@ -31,6 +34,8 @@ export function getBodyDisplayRadius(body: Body, scene: Scene) {
 }
 
 export function drawScene(context: CanvasRenderingContext2D, width: number, height: number, scene: Scene) {
+  const screenPoint = vector()
+  const trackPosition = vector()
   context.clearRect(0, 0, width, height)
   context.fillStyle = '#0a1015'
   context.fillRect(0, 0, width, height)
@@ -40,13 +45,13 @@ export function drawScene(context: CanvasRenderingContext2D, width: number, heig
   if (scene.showTrails) drawTrails(context, width, height, focus)
   scene.simulation.bodies.forEach((body) => drawBody(context, width, height, focus, body))
 
-  function worldToScreen(position: Vector, width: number, height: number, focus: Vector) { return projectToScreen(position, width, height, focus, scene.cameraOffset, scene.displayScale) }
+  function worldToScreen(position: Vector, width: number, height: number, focus: Vector) { return projectToScreen(position, width, height, focus, scene.cameraOffset, scene.displayScale, screenPoint) }
   function drawGrid(context: CanvasRenderingContext2D, width: number, height: number) {
     context.save()
     context.strokeStyle = 'rgba(110, 153, 165, 0.08)'
     context.lineWidth = 1
     const spacing = 48
-    const origin = worldToScreen(vector(), width, height, vector())
+    const origin = worldToScreen(ZERO, width, height, ZERO)
     for (let x = (origin.x % spacing + spacing) % spacing; x < width; x += spacing) { context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke() }
     for (let y = (origin.y % spacing + spacing) % spacing; y < height; y += spacing) { context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke() }
     context.strokeStyle = 'rgba(110, 153, 165, 0.14)'
@@ -75,13 +80,19 @@ export function drawScene(context: CanvasRenderingContext2D, width: number, heig
         context.beginPath(); context.setLineDash([3, 5]); context.strokeStyle = `${mission.color}44`
         let started = false
         const day = replay.start + scene.simulation.elapsed * 365.25
-        replay.tracks[mission.id]!.forEach((row, index) => {
-          if (replay.routeDays && (row[0]! < day || row[0]! > day + replay.routeDays)) return
-          const point = worldToScreen(scene.view?.tracks[mission.id]?.[index] ?? vector(row[1], row[2]), width, height, focus)
+        const track = replay.tracks[mission.id]!
+        const projected = scene.view?.tracks[mission.id]
+        const start = replay.routeDays ? trackBound(track, day) : 0
+        const end = replay.routeDays ? trackBound(track, day + replay.routeDays, true) : track.length
+        for (let index = start; index < end; index++) {
+          const row = track[index]!
+          trackPosition.x = row[1]!
+          trackPosition.y = row[2]!
+          const point = worldToScreen(projected?.[index] ?? trackPosition, width, height, focus)
           if (!started) context.moveTo(point.x, point.y)
           else context.lineTo(point.x, point.y)
           started = true
-        })
+        }
         context.stroke(); context.setLineDash([])
         mission.events.filter(event => replay.markerEvents ? replay.markerEvents.includes(event.label) : event.label.endsWith('flyby')).forEach(event => {
           const state = replay.sample(mission.id, event.years)
@@ -103,10 +114,15 @@ export function drawScene(context: CanvasRenderingContext2D, width: number, heig
         if (!(body.id in replay.tracks)) return
         context.beginPath()
         let started = false
-        for (const [index, row] of replay.tracks[body.id]!.entries()) {
-          if (row[0]! > day) break
-          if (row[0]! < day - (replay.trailDays ?? (body.role === 'Spacecraft' ? Infinity : 90))) continue
-          const point = worldToScreen(scene.view?.tracks[body.id]?.[index] ?? vector(row[1], row[2]), width, height, focus)
+        const track = replay.tracks[body.id]!
+        const projected = scene.view?.tracks[body.id]
+        const start = trackBound(track, day - (replay.trailDays ?? (body.role === 'Spacecraft' ? Infinity : 90)))
+        const end = trackBound(track, day, true)
+        for (let index = start; index < end; index++) {
+          const row = track[index]!
+          trackPosition.x = row[1]!
+          trackPosition.y = row[2]!
+          const point = worldToScreen(projected?.[index] ?? trackPosition, width, height, focus)
           if (!started) context.moveTo(point.x, point.y)
           else context.lineTo(point.x, point.y)
           started = true
@@ -151,7 +167,7 @@ export function drawScene(context: CanvasRenderingContext2D, width: number, heig
     context.restore()
   }
   function drawSaturnRings(context: CanvasRenderingContext2D, point: Vector, front: boolean) {
-    for (const [inner, outer, color] of [[74658, 92000, '#89775788'], [92000, 117580, '#c4b18ab0'], [122170, 136775, '#a99b7d99']] as const) {
+    for (const [inner, outer, color] of SATURN_RINGS) {
       const outerRadius = outer / AU_KM * scene.displayScale
       const innerRadius = inner / AU_KM * scene.displayScale
       const start = front ? 0 : Math.PI

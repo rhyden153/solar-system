@@ -7,9 +7,10 @@
     "dev": "nuxt dev",
     "generate": "node --max-old-space-size=4096 ./node_modules/nuxt/bin/nuxt.mjs generate",
     "preview": "nuxi preview --host 0.0.0.0",
-  "start": "npx serve .output/public",
+    "start": "npx serve .output/public",
     "postinstall": "nuxt prepare",
-    "test": "node scripts/test-core.mjs && node scripts/test-components.mjs && node scripts/test-voyager.mjs && node scripts/test-galileo.mjs && node scripts/test-presets.mjs && node scripts/test-loading.mjs",
+    "test": "node scripts/test-core.mjs && node scripts/test-components.mjs && node scripts/test-voyager.mjs && node scripts/test-galileo.mjs && node scripts/test-presets.mjs && node scripts/test-loading.mjs && node scripts/test-runtime.mjs",
+    "benchmark": "node --expose-gc scripts/benchmark-runtime.mjs",
     "typecheck": "nuxt typecheck",
     "test:deployment": "node scripts/test-deployment.mjs"
   },
@@ -17,6 +18,7 @@
     "node": "^24.11.0"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "nuxt": "^4.5.2",
     "vue": "^3.5.41",
     "vue-router": "^5.2.0"
