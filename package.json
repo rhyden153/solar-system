@@ -20,6 +20,7 @@
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
     "nuxt": "^4.5.2",
+    "redis": "^6.3.0",
     "vue": "^3.5.41",
     "vue-router": "^5.2.0"
   },
